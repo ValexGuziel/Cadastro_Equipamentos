@@ -1,0 +1,129 @@
+/* style.css */
+
+/* Ícone para o título */
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
+
+/* --- Paleta de Cores Profissional - TEMA ESCURO --- */
+:root {
+  --cor-secundaria-azul: #05021f;
+  --cor-primaria-amarelo: #ffc107;
+  /* Amarelo industrial (Bootstrap Warning) */
+  --cor-acento-vermelho: #dc3545;
+  /* Vermelho para alertas (Bootstrap Danger) */
+  --cor-fundo-escuro: #2c3034;
+  --cor-container-escuro: #3a3f44;
+  --cor-texto-claro: #f8f9fa;
+  --cor-borda-escura: #495057;
+  --cor-texto-escuro: #212529;
+  --cor-branca: #ffffff;
+}
+
+body {
+  background-color: var(--cor-fundo-escuro);
+  color: var(--cor-texto-claro);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.container {
+  background-color: var(--cor-container-escuro);
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1200px;
+  border-top: 4px solid var(--cor-primaria-amarelo);
+}
+
+h2 {
+  color: var(--cor-texto-claro);
+  font-weight: 600;
+}
+
+h2 .bi {
+  margin-right: 0.5rem;
+}
+
+/* --- Estilização dos Formulários --- */
+.form-control,
+.form-select {
+  background-color: #495057;
+  color: var(--cor-texto-claro);
+  border-color: var(--cor-borda-escura);
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: #495057;
+  color: var(--cor-texto-claro);
+  border-color: var(--cor-primaria-amarelo);
+  box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25);
+}
+
+.form-control::placeholder {
+  color: #adb5bd;
+}
+
+/* Cor do texto das options no select */
+.form-select option {
+  background: var(--cor-container-escuro);
+  color: var(--cor-texto-claro);
+}
+
+/* Inputs desabilitados */
+.form-control:disabled {
+  background-color: #212529;
+  opacity: 0.7;
+}
+
+/* --- Estilização dos Botões --- */
+.btn-primary {
+  background-color: var(--cor-primaria-amarelo);
+  border-color: var(--cor-primaria-amarelo);
+  color: var(--cor-texto-escuro);
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background-color: #d39e00;
+  border-color: #c69500;
+  color: var(--cor-texto-escuro);
+}
+
+.input-group .btn {
+  border-color: var(--cor-borda-escura);
+}
+
+.input-group .btn:hover {
+  background-color: var(--cor-acento-vermelho);
+  color: var(--cor-branca);
+  border-color: var(--cor-acento-vermelho);
+}
+
+/* --- Ícones e Detalhes --- */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  /* Inverte as cores do ícone para ficar visível no fundo escuro */
+  filter: invert(1);
+  opacity: 0.7;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* --- Modais --- */
+.modal-content {
+  background-color: var(--cor-container-escuro);
+  color: var(--cor-texto-claro);
+}
+
+.modal-header {
+  border-bottom-color: var(--cor-borda-escura);
+}
+
+.modal-footer {
+  border-top-color: var(--cor-borda-escura);
+}
+
+.btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
