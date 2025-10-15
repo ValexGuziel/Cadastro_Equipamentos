@@ -64,7 +64,7 @@ if (!$equipamento) {
 
             <div class="mt-4">
                 <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-                <a href="equipamentos.html" class="btn btn-secondary">Cancelar</a>
+                <a href="equipamentos.php" class="btn btn-secondary">Cancelar</a>
             </div>
         </form>
         <?php else: ?>
@@ -98,7 +98,7 @@ if (!$equipamento) {
                 messageDiv.className = 'alert alert-success';
                 // Redireciona para a lista após 2 segundos
                 setTimeout(() => {
-                    window.location.href = 'equipamentos.html';
+                    window.location.href = 'equipamentos.php';
                 }, 2000);
             } else {
                 messageDiv.className = 'alert alert-danger';

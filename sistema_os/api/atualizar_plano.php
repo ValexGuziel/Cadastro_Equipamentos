@@ -24,7 +24,7 @@ function updatePlanoManutencao(array $postData, mysqli $conn): array
         return $response;
     }
 
-    $data_ultima_preventiva = (new DateTime($data_ultima_preventiva_raw))->format('Y-m-d');
+    $data_ultima_preventiva = (new DateTime($data_ultima_preventiva_raw))->format('Y-m-d H:i:s');
     if (!$data_ultima_preventiva) {
         $response['message'] = 'Data da última preventiva inválida.';
         return $response;
@@ -33,7 +33,7 @@ function updatePlanoManutencao(array $postData, mysqli $conn): array
     // Calcular a próxima data
     $periodicidade_dias = ['Semanal' => 7, 'Quinzenal' => 15, 'Mensal' => 30, 'Bimestral' => 60, 'Trimestral' => 90, 'Semestral' => 180, 'Anual' => 365];
     $dias_a_adicionar = $periodicidade_dias[$periodicidade] ?? 0;
-    $data_proxima_preventiva = (new DateTime($data_ultima_preventiva))->modify("+$dias_a_adicionar days")->format('Y-m-d');
+    $data_proxima_preventiva = (new DateTime($data_ultima_preventiva))->modify("+$dias_a_adicionar days")->format('Y-m-d H:i:s');
 
     $stmt = $conn->prepare("UPDATE planos_manutencao SET periodicidade = ?, data_ultima_preventiva = ?, data_proxima_preventiva = ?, instrucoes = ? WHERE id = ?");
     if (!$stmt) {

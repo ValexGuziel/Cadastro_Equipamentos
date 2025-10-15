@@ -41,7 +41,8 @@ $page_title = 'Lista de Ordens de Serviço';
                         <th data-column="numero_os">Nº O.S.</th>
                         <th data-column="equipamento_nome">Equipamento</th>
                         <th data-column="setor_nome">Setor</th>
-                        <th data-column="data_inicial">Data de Abertura</th>
+                        <th data-column="data_inicial">Data Relevante</th>
+                        <th data-column="tecnico_nome">Técnico</th>
                         <th data-column="prioridade">Prioridade</th>
                         <th data-column="status">Status</th>
                         <th>Ações</th>
@@ -49,15 +50,15 @@ $page_title = 'Lista de Ordens de Serviço';
                 </thead>
                 <tbody id="corpo-tabela-os">
                     <tr>
-                        <td colspan="7" class="text-center">Carregando...</td>
+                        <td colspan="8" class="text-center">Carregando...</td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
-        <div id="paginacao-container" class="d-flex justify-content-center">
+        <nav id="paginacao-container" class="d-flex justify-content-center">
             <!-- Paginação será gerada aqui -->
-        </div>
+        </nav>
     </main>
 
     <script>
@@ -91,12 +92,6 @@ $page_title = 'Lista de Ordens de Serviço';
                     return 'bg-danger';
                 case 'Concluída':
                     return 'bg-success';
-                case 'Em Andamento':
-                    return 'bg-primary';
-                case 'Aguardando Peça':
-                    return 'bg-warning text-dark'; // Adicionado text-dark para melhor contraste
-                case 'Cancelada':
-                    return 'bg-secondary';
                 default:
                     return 'bg-dark';
             }
@@ -111,23 +106,31 @@ $page_title = 'Lista de Ordens de Serviço';
             const itensPaginados = dadosFiltrados.slice(inicio, fim);
 
             if (itensPaginados.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center">Nenhuma Ordem de Serviço encontrada.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center">Nenhuma Ordem de Serviço encontrada.</td></tr>`;
                 return;
             }
 
             itensPaginados.forEach(os => {
                 const statusClass = getStatusBadgeClass(os.status);
+                
+                // Determina qual data exibir e o título da célula
+                const isConcluida = os.status === 'Concluída';
+                const dataParaExibir = isConcluida ? os.data_final : os.data_inicial;
+                const tituloData = isConcluida ? 'Data de Conclusão' : 'Data de Abertura';
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${os.numero_os}</td>
                     <td>${os.equipamento_tag} - ${os.equipamento_nome}</td>
                     <td>${os.setor_nome}</td>
-                    <td>${formatarData(os.data_inicial)}</td>
+                    <td title="${tituloData}">${formatarData(dataParaExibir)}</td>
+                    <td>${os.tecnico_nome || 'N/A'}</td>
                     <td>${os.prioridade}</td>
                     <td><span class="badge ${statusClass}">${os.status}</span></td>
                     <td>
                         <a href="editar_os.php?id=${os.id}" class="btn btn-sm btn-warning" title="Editar"><i class="bi bi-pencil"></i></a>
                         <a href="imprimir_os.php?id=${os.id}" target="_blank" class="btn btn-sm btn-info" title="Imprimir"><i class="bi bi-printer"></i></a>
+                        <button class="btn btn-sm btn-danger btn-excluir" data-id="${os.id}" title="Excluir"><i class="bi bi-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -139,17 +142,22 @@ $page_title = 'Lista de Ordens de Serviço';
             const totalPaginas = Math.ceil(dadosFiltrados.length / linhasPorPagina);
             if (totalPaginas <= 1) return;
 
+            const ul = document.createElement('ul');
+            ul.className = 'pagination';
+
             for (let i = 1; i <= totalPaginas; i++) {
                 const li = document.createElement('li');
                 li.className = `page-item ${i === paginaAtual ? 'active' : ''}`;
                 li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
                 li.addEventListener('click', (e) => {
                     e.preventDefault();
+                    paginaAtual = i;
                     renderizarTabela(i);
                     renderizarPaginacao();
                 });
-                paginacaoContainer.appendChild(li);
+                ul.appendChild(li);
             }
+            paginacaoContainer.appendChild(ul);
         }
 
         function filtrarEAtualizar() {
@@ -160,6 +168,7 @@ $page_title = 'Lista de Ordens de Serviço';
                     os.equipamento_nome.toLowerCase().includes(termoBusca) ||
                     os.equipamento_tag.toLowerCase().includes(termoBusca) ||
                     os.setor_nome.toLowerCase().includes(termoBusca) ||
+                    (os.tecnico_nome && os.tecnico_nome.toLowerCase().includes(termoBusca)) ||
                     os.status.toLowerCase().includes(termoBusca) ||
                     os.prioridade.toLowerCase().includes(termoBusca)
                 );
@@ -199,7 +208,7 @@ $page_title = 'Lista de Ordens de Serviço';
                     throw new Error(result.message || 'Erro ao carregar dados.');
                 }
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Falha ao carregar Ordens de Serviço.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Falha ao carregar Ordens de Serviço.</td></tr>`;
                 console.error(error);
             }
         }
@@ -213,6 +222,44 @@ $page_title = 'Lista de Ordens de Serviço';
         });
 
         carregarDados();
+
+        // Delegação de eventos para o botão de exclusão
+        tbody.addEventListener('click', function (event) {
+            const deleteButton = event.target.closest('.btn-excluir');
+
+            if (deleteButton) {
+                const id = deleteButton.dataset.id;
+                const osNumero = deleteButton.closest('tr').querySelector('td').textContent; // Pega o número da OS da primeira célula
+                
+                if (confirm(`Tem certeza que deseja excluir a Ordem de Serviço Nº ${osNumero}?`)) {
+                    excluirOS(id);
+                }
+            }
+        });
+
+        function excluirOS(id) {
+            fetch('api/excluir_os.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id }),
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // Remove o item do array de dados e re-renderiza a tabela
+                    todasOS = todasOS.filter(os => os.id != id);
+                    filtrarEAtualizar();
+                    // Opcional: mostrar um alerta de sucesso mais sutil
+                    alert(result.message);
+                } else {
+                    alert('Erro ao excluir: ' + result.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro na requisição de exclusão:', error);
+                alert('Ocorreu um erro de comunicação ao tentar excluir a O.S.');
+            });
+        }
     });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

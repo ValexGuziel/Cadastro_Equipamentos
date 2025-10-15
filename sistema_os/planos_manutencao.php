@@ -74,14 +74,14 @@ require_once __DIR__ . '/header.php';
                 <!-- Data da Última Preventiva -->
                 <div class="col-md-6">
                     <label for="data_ultima_preventiva" class="form-label">Data da Última Preventiva</label>
-                    <input type="date" class="form-control" id="data_ultima_preventiva" name="data_ultima_preventiva" required>
+                    <input type="datetime-local" class="form-control" id="data_ultima_preventiva" name="data_ultima_preventiva" required>
                     <div class="invalid-feedback">Por favor, informe a data da última manutenção.</div>
                 </div>
 
                 <!-- Data da Próxima Preventiva (calculado) -->
                 <div class="col-md-6">
                     <label for="data_proxima_preventiva" class="form-label">Próxima Preventiva</label>
-                    <input type="text" class="form-control" id="data_proxima_preventiva" name="data_proxima_preventiva" readonly>
+                    <input type="datetime-local" class="form-control" id="data_proxima_preventiva" name="data_proxima_preventiva" required readonly>
                 </div>
 
                 <!-- Instruções -->
@@ -119,14 +119,13 @@ require_once __DIR__ . '/header.php';
             const periodicidade = periodicidadeSelect.value;
 
             if (ultimaData && periodicidade && periodicidadeDias[periodicidade]) {
-                const data = new Date(ultimaData + 'T00:00:00'); // Adiciona T00:00:00 para evitar problemas de fuso
+                const data = new Date(ultimaData);
                 data.setDate(data.getDate() + periodicidadeDias[periodicidade]);
                 
-                const dia = String(data.getDate()).padStart(2, '0');
-                const mes = String(data.getMonth() + 1).padStart(2, '0');
-                const ano = data.getFullYear();
-
-                proximaPrevInput.value = `${dia}/${mes}/${ano}`;
+                // Formata para YYYY-MM-DDTHH:MM
+                const offset = data.getTimezoneOffset();
+                const dataLocal = new Date(data.getTime() - (offset*60*1000));
+                proximaPrevInput.value = dataLocal.toISOString().slice(0,16);
             } else {
                 proximaPrevInput.value = '';
             }

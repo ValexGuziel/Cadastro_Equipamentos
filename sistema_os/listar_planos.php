@@ -86,6 +86,10 @@ $page_title = 'Planos de Manutenção';
                 </tbody>
             </table>
         </div>
+
+        <nav id="paginacao-container" class="d-flex justify-content-center no-print">
+            <!-- Botões de paginação serão inseridos aqui -->
+        </div>
     </main>
 
     <!-- Modal Histórico de Preventivas -->
@@ -160,29 +164,47 @@ $page_title = 'Planos de Manutenção';
 
         let todosPlanos = [];
         let dadosFiltrados = [];
+        let paginaAtual = 1;
+        const linhasPorPagina = 15;
         let sortColumn = 'data_proxima_preventiva';
         let sortDirection = 'asc';
 
         function formatarData(data) {
             if (!data) return 'N/A';
             try {
-                const [ano, mes, dia] = data.split('-');
-                return `${dia}/${mes}/${ano}`;
+                const dt = new Date(data);
+                // Verifica se a data é válida
+                if (isNaN(dt.getTime())) {
+                    return 'Data inválida';
+                }
+                const dia = String(dt.getDate()).padStart(2, '0');
+                const mes = String(dt.getMonth() + 1).padStart(2, '0'); // Mês é 0-indexado
+                const ano = dt.getFullYear();
+                const horas = String(dt.getHours()).padStart(2, '0');
+                const minutos = String(dt.getMinutes()).padStart(2, '0');
+                return `${dia}/${mes}/${ano} ${horas}:${minutos}`;
             } catch (e) {
                 return 'Data inválida';
             }
         }
 
-        function renderizarTabela() {
+        function renderizarTabela(pagina) {
             tbody.innerHTML = '';
+            paginaAtual = pagina;
 
-            if (dadosFiltrados.length === 0) {
+            const inicio = (pagina - 1) * linhasPorPagina;
+            const fim = inicio + linhasPorPagina;
+            const itensPaginados = dadosFiltrados.slice(inicio, fim);
+
+
+            if (itensPaginados.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center">Nenhum plano de manutenção encontrado.</td></tr>`;
                 return;
             }
 
-            dadosFiltrados.forEach(plano => {
+            itensPaginados.forEach(plano => {
                 const tr = document.createElement('tr');
+                tr.dataset.planoId = plano.id; // Adiciona o ID do plano à linha
                 tr.innerHTML = `
                     <td>${plano.equipamento_tag} - ${plano.equipamento_nome}</td>
                     <td>${plano.setor_nome}</td>
@@ -190,29 +212,14 @@ $page_title = 'Planos de Manutenção';
                     <td>${formatarData(plano.data_ultima_preventiva)}</td>
                     <td class="fw-bold ${new Date(plano.data_proxima_preventiva) <= new Date() ? 'text-danger' : ''}">${formatarData(plano.data_proxima_preventiva)}</td>
                     <td class="no-print">
-                        <button class="btn btn-sm btn-primary btn-gerar-os" title="Gerar O.S. Preventiva" data-plano-id="${plano.id}"><i class="bi bi-journal-plus"></i></button>
                         <button class="btn btn-sm btn-secondary btn-historico" title="Ver Histórico"><i class="bi bi-clock-history"></i></button>
                         <button class="btn btn-sm btn-success btn-detalhes" title="Ver Detalhes"><i class="bi bi-eye"></i></button>
                         <a href="imprimir_plano.php?id=${plano.id}" target="_blank" class="btn btn-sm btn-info" title="Imprimir"><i class="bi bi-printer"></i></a>
                         <a href="editar_plano.php?id=${plano.id}" class="btn btn-sm btn-warning" title="Editar"><i class="bi bi-pencil"></i></a>
+                        <button class="btn btn-sm btn-danger btn-excluir" title="Excluir Plano" data-plano-id="${plano.id}"><i class="bi bi-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
-
-                // Adiciona o evento de clique para o botão de detalhes da linha atual
-                tr.querySelector('.btn-detalhes').addEventListener('click', () => {
-                    mostrarDetalhes(plano);
-                });
-
-                // Adiciona o evento de clique para o botão de histórico
-                tr.querySelector('.btn-historico').addEventListener('click', () => {
-                    mostrarHistorico(plano);
-                });
-
-                // Adiciona o evento de clique para o botão de gerar O.S.
-                tr.querySelector('.btn-gerar-os').addEventListener('click', (e) => {
-                    gerarOSPreventiva(e.currentTarget.dataset.planoId, plano);
-                });
             });
         }
 
@@ -227,6 +234,30 @@ $page_title = 'Planos de Manutenção';
                 );
             });
             ordenarDados(sortColumn, false);
+        }
+
+        function renderizarPaginacao() {
+            const paginacaoContainer = document.getElementById('paginacao-container');
+            paginacaoContainer.innerHTML = '';
+            const totalPaginas = Math.ceil(dadosFiltrados.length / linhasPorPagina);
+
+            if (totalPaginas <= 1) return;
+
+            const ul = document.createElement('ul');
+            ul.className = 'pagination';
+
+            for (let i = 1; i <= totalPaginas; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === paginaAtual ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+                li.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    renderizarTabela(i);
+                    renderizarPaginacao();
+                });
+                ul.appendChild(li);
+            }
+            paginacaoContainer.appendChild(ul);
         }
 
         function ordenarDados(coluna, inverterDirecao = true) {
@@ -245,7 +276,8 @@ $page_title = 'Planos de Manutenção';
             thead.querySelectorAll('th[data-column]').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
             thead.querySelector(`th[data-column="${coluna}"]`).classList.add(`sort-${sortDirection}`);
 
-            renderizarTabela();
+            renderizarTabela(1);
+            renderizarPaginacao();
         }
 
         async function carregarDados() {
@@ -326,34 +358,48 @@ $page_title = 'Planos de Manutenção';
             document.body.removeChild(printContainer);
         }
 
-        async function gerarOSPreventiva(planoId, plano) {
-            if (!confirm(`Deseja realmente gerar uma Ordem de Serviço Preventiva para o equipamento "${plano.equipamento_tag} - ${plano.equipamento_nome}"?`)) {
+        async function excluirPlano(planoId, plano) {
+            const confirmacao = `Tem certeza que deseja excluir o plano de manutenção para o equipamento "${plano.equipamento_tag} - ${plano.equipamento_nome}"? Esta ação não pode ser desfeita.`;
+            if (!confirm(confirmacao)) {
                 return;
             }
 
             try {
-                const response = await fetch('api/gerar_os_plano.php', {
+                const response = await fetch('api/excluir_plano.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `plano_id=${planoId}`
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: planoId })
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(`O.S. Preventiva Nº ${result.numero_os} gerada com sucesso! A página será recarregada.`);
-                    // Recarrega os dados para refletir a nova data da próxima preventiva
-                    carregarDados(); 
+                    alert(result.message);
+                    // Remove o plano da lista de dados e atualiza a tabela
+                    todosPlanos = todosPlanos.filter(p => p.id != planoId);
+                    filtrarEAtualizar();
                 } else {
-                    throw new Error(result.message || 'Falha ao gerar a O.S.');
+                    throw new Error(result.message || 'Falha ao excluir o plano.');
                 }
-
             } catch (error) {
-                console.error('Erro ao gerar O.S. Preventiva:', error);
+                console.error('Erro ao excluir plano:', error);
                 alert(`Erro: ${error.message}`);
             }
         }
 
+        // Delegação de eventos para os botões de ação na tabela
+        tbody.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const tr = button.closest('tr');
+            const planoId = tr.dataset.planoId;
+            const plano = dadosFiltrados.find(p => p.id == planoId);
+
+            if (button.classList.contains('btn-detalhes')) mostrarDetalhes(plano);
+            if (button.classList.contains('btn-historico')) mostrarHistorico(plano);
+            if (button.classList.contains('btn-excluir')) excluirPlano(planoId, plano);
+        });
 
         campoBusca.addEventListener('keyup', filtrarEAtualizar);
         thead.addEventListener('click', (e) => {

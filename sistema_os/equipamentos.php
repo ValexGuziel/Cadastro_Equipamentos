@@ -222,10 +222,10 @@ $page_title = 'Lista de Equipamentos';
 
       // Delegação de eventos para os botões de ação
       tbody.addEventListener('click', function (event) {
-        const target = event.target;
-        const id = target.dataset.id;
+        const deleteButton = event.target.closest('.btn-excluir');
 
-        if (target.classList.contains('btn-excluir')) {
+        if (deleteButton) {
+          const id = deleteButton.dataset.id;
           if (confirm(`Tem certeza que deseja excluir o equipamento com ID ${id}?`)) {
             excluirEquipamento(id);
           }

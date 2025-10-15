@@ -1,107 +1,101 @@
 <?php
-require_once 'db_connect.php';
+// api/kpi_data.php
 
+require_once 'db_connect.php';
 header('Content-Type: application/json');
 
-$response = [
-    'success' => false,
-    'message' => 'Não foi possível calcular os KPIs.',
-    'data' => [
-        'mtbf' => 0,
-        'mttr' => 0,
-        'mp_compliance' => 0,
-        'backlog' => 0
-    ]
-];
+$period = $_GET['period'] ?? '90'; // Padrão de 90 dias
+$period_filter_os = ""; // Filtro para a tabela 'ordens_servico' com alias 'os'
+$period_filter_no_alias_final = ""; // Filtro para tabelas sem alias, baseado na data final
+$period_filter_no_alias_inicial = ""; // Filtro para tabelas sem alias, baseado na data inicial
+if (is_numeric($period)) {
+    $period_filter_os = "AND os.data_final >= DATE_SUB(NOW(), INTERVAL $period DAY)";
+    $period_filter_no_alias_final = "AND data_final >= DATE_SUB(NOW(), INTERVAL $period DAY)";
+    $period_filter_no_alias_inicial = "AND data_inicial >= DATE_SUB(NOW(), INTERVAL $period DAY)";
+}
+
+$response = ['success' => true, 'data' => []];
 
 try {
-    // --- 1. Cálculo do Backlog (em Horas) ---
-    // Soma as horas estimadas de todas as O.S. que não estão 'Concluída' ou 'Cancelada'.
-    $result_backlog = $conn->query("SELECT SUM(horas_estimadas) AS total_horas FROM ordens_servico WHERE status NOT IN ('Concluída', 'Cancelada')");
-    $backlog_data = $result_backlog->fetch_assoc();
-    $response['data']['backlog'] = round((float) ($backlog_data['total_horas'] ?? 0), 2);
+    // --- MTBF (Mean Time Between Failures) ---
+    // Simplificado: Média de dias entre falhas corretivas para um mesmo equipamento.
+    // Uma implementação mais robusta agruparia por equipamento.
+    $sql_mtbf = "
+        SELECT AVG(DATEDIFF(next_failure, data_inicial)) as mtbf_days
+        FROM (
+            SELECT 
+                data_inicial, 
+                LEAD(data_inicial, 1) OVER (PARTITION BY equipamento_id ORDER BY data_inicial) as next_failure
+            FROM ordens_servico
+            WHERE tipo_manutencao_id = (SELECT id FROM tipos_manutencao WHERE nome LIKE 'Corretiva')
+              AND status = 'Concluída' $period_filter_no_alias_final
+        ) as failures
+        WHERE next_failure IS NOT NULL
+    ";
+    $mtbf_result = $conn->query($sql_mtbf);
+    $mtbf_data = $mtbf_result->fetch_assoc();
+    $response['data']['mtbf'] = round(($mtbf_data['mtbf_days'] ?? 0) * 24, 2); // Em horas
 
-    // --- 2. Cálculo do MTTR (Tempo Médio Para Reparo) em horas ---
-    // Média do tempo entre a abertura e a conclusão das O.S. corretivas.
-    $query_mttr = "
-        SELECT AVG(TIMESTAMPDIFF(HOUR, data_inicial, data_final)) AS mttr_horas
+    // --- MTTR (Mean Time To Repair) ---
+    $sql_mttr = "
+        SELECT AVG(TIMESTAMPDIFF(HOUR, data_inicial, data_final)) as mttr_hours
         FROM ordens_servico
-        WHERE status = 'Concluída'
-        AND data_final IS NOT NULL
-        AND tipo_manutencao_id = (SELECT id FROM tipos_manutencao WHERE nome LIKE '%Corretiva%' LIMIT 1)
+        WHERE status = 'Concluída' AND data_final IS NOT NULL $period_filter_no_alias_final
     ";
-    $result_mttr = $conn->query($query_mttr);
-    $mttr_data = $result_mttr->fetch_assoc();
-    // Arredonda para 2 casas decimais. Se for null (nenhuma OS), o valor é 0.
-    $response['data']['mttr'] = round((float) ($mttr_data['mttr_horas'] ?? 0), 2);
+    $mttr_result = $conn->query($sql_mttr);
+    $mttr_data = $mttr_result->fetch_assoc();
+    $response['data']['mttr'] = round($mttr_data['mttr_hours'] ?? 0, 2);
 
+    // --- Cumprimento de Preventivas (%) ---
+    $sql_mp_total = "SELECT COUNT(id) as total FROM ordens_servico WHERE tipo_manutencao_id = (SELECT id FROM tipos_manutencao WHERE nome LIKE 'Preventiva') $period_filter_no_alias_inicial";
+    $sql_mp_concluidas = "SELECT COUNT(id) as concluidas FROM ordens_servico WHERE tipo_manutencao_id = (SELECT id FROM tipos_manutencao WHERE nome LIKE 'Preventiva') AND status = 'Concluída' $period_filter_no_alias_final";
+    $total_mp = $conn->query($sql_mp_total)->fetch_assoc()['total'] ?? 0;
+    $concluidas_mp = $conn->query($sql_mp_concluidas)->fetch_assoc()['concluidas'] ?? 0;
+    $response['data']['mp_compliance'] = ($total_mp > 0) ? round(($concluidas_mp / $total_mp) * 100, 2) : 0;
 
-    // --- 3. Cálculo do Cumprimento de Preventivas (MP) em % ---
-    // (Planos executados no prazo / Planos totais vencidos ou executados) * 100
-    $query_mp = "
+    // --- Backlog (Horas) ---
+    $sql_backlog = "SELECT SUM(horas_estimadas) as backlog_hours FROM ordens_servico WHERE status = 'Aberta'";
+    $backlog_result = $conn->query($sql_backlog);
+    $response['data']['backlog'] = round($backlog_result->fetch_assoc()['backlog_hours'] ?? 0, 2);
+
+    // --- Fator de Produtividade da Mão de Obra ---
+    $sql_prod = "
+        SELECT 
+            SUM(horas_estimadas) as total_estimado,
+            SUM(TIMESTAMPDIFF(HOUR, data_inicial, data_final)) as total_real
+        FROM ordens_servico 
+        WHERE status = 'Concluída' AND data_final IS NOT NULL AND data_inicial IS NOT NULL $period_filter_no_alias_final
+    ";
+    $prod_result = $conn->query($sql_prod)->fetch_assoc();
+    $total_estimado = $prod_result['total_estimado'] ?? 0;
+    $total_real = $prod_result['total_real'] ?? 0;
+    
+    // Calcula o fator de produtividade (resultado entre 0 e 1, que pode ser formatado como %)
+    // Um valor de 1.0 significa que o tempo real foi igual ao estimado.
+    // Um valor > 1.0 significa que a equipe foi mais rápida que o estimado (produtiva).
+    // Um valor < 1.0 significa que a equipe demorou mais que o estimado.
+    $response['data']['produtividade'] = ($total_real > 0) ? round($total_estimado / $total_real, 2) : 0;
+
+    // --- O.S. Concluídas por Técnico ---
+    $sql_os_tecnico = "
         SELECT
-            -- Conta planos cuja última preventiva foi feita ANTES da data da próxima planejada.
-            SUM(CASE WHEN p.data_ultima_preventiva <= p.data_proxima_preventiva THEN 1 ELSE 0 END) AS executadas_no_prazo,
-            -- Conta todos os planos que já tiveram uma data de próxima preventiva no passado.
-            COUNT(p.id) AS total_vencidas
-        FROM planos_manutencao p
-        WHERE p.data_proxima_preventiva <= CURDATE()
+            t.nome as tecnico_nome,
+            COUNT(os.id) as total_os
+        FROM ordens_servico os
+        JOIN tecnicos t ON os.tecnico_id = t.id
+        WHERE os.status = 'Concluída' AND os.tecnico_id IS NOT NULL $period_filter_os
+        GROUP BY t.nome
+        HAVING total_os > 0
+        ORDER BY total_os DESC
     ";
-    $result_mp = $conn->query($query_mp);
-    $mp_data = $result_mp->fetch_assoc();
+    $os_tecnico_result = $conn->query($sql_os_tecnico);
+    $response['data']['os_por_tecnico'] = $os_tecnico_result->fetch_all(MYSQLI_ASSOC);
 
-    $executadas_no_prazo = (int) ($mp_data['executadas_no_prazo'] ?? 0);
-    $total_vencidas = (int) ($mp_data['total_vencidas'] ?? 0);
-
-    if ($total_vencidas > 0) {
-        $response['data']['mp_compliance'] = round(($executadas_no_prazo / $total_vencidas) * 100, 2);
-    } else {
-        $response['data']['mp_compliance'] = 100; // Se não há preventivas vencidas, o cumprimento é 100%
-    }
-
-    // --- 4. Cálculo do MTBF (Tempo Médio Entre Falhas) em horas ---
-    // Este é um cálculo complexo. A abordagem aqui é uma simplificação comum:
-    // (Soma do tempo de operação entre falhas consecutivas) / (Número de falhas - 1)
-    // Vamos calcular por equipamento e depois tirar a média geral.
-
-    $query_falhas = "
-        SELECT
-            equipamento_id,
-            data_inicial AS data_falha,
-            data_final AS data_reparo
-        FROM ordens_servico
-        WHERE status = 'Concluída'
-        AND tipo_manutencao_id = (SELECT id FROM tipos_manutencao WHERE nome LIKE '%Corretiva%' LIMIT 1)
-        ORDER BY equipamento_id, data_inicial ASC
-    ";
-    $result_falhas = $conn->query($query_falhas);
-
-    $tempos_operacao = [];
-    $falhas_por_equipamento = [];
-    while ($falha = $result_falhas->fetch_assoc()) {
-        $falhas_por_equipamento[$falha['equipamento_id']][] = $falha;
-    }
-
-    foreach ($falhas_por_equipamento as $equip_id => $falhas) {
-        if (count($falhas) > 1) {
-            for ($i = 0; $i < count($falhas) - 1; $i++) {
-                $reparo_anterior = new DateTime($falhas[$i]['data_reparo']);
-                $falha_seguinte = new DateTime($falhas[$i + 1]['data_falha']);
-                $diff = $falha_seguinte->getTimestamp() - $reparo_anterior->getTimestamp();
-                $tempos_operacao[] = $diff / 3600; // Converte para horas
-            }
-        }
-    }
-
-    if (count($tempos_operacao) > 0) {
-        $response['data']['mtbf'] = round(array_sum($tempos_operacao) / count($tempos_operacao), 2);
-    } // Se não, mantém 0
-
-    $response['success'] = true;
-    $response['message'] = 'KPIs calculados com sucesso.';
 
 } catch (Exception $e) {
-    $response['message'] = 'Erro no servidor: ' . $e->getMessage();
+    $response['success'] = false;
+    $response['message'] = $e->getMessage();
+    http_response_code(500);
 }
 
 $conn->close();

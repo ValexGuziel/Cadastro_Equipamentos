@@ -35,10 +35,12 @@ function registrarHistoricoPreventiva(int $os_id, int $equipamento_id, string $d
             // 3. Atualizar o plano de manutenção principal
             $periodicidade_dias = ['Semanal' => 7, 'Quinzenal' => 15, 'Mensal' => 30, 'Bimestral' => 60, 'Trimestral' => 90, 'Semestral' => 180, 'Anual' => 365];
             $dias_a_adicionar = $periodicidade_dias[$periodicidade] ?? 0;
-            $data_proxima_preventiva = (new DateTime($data_final))->modify("+$dias_a_adicionar days")->format('Y-m-d');
+            $data_final_dt = new DateTime($data_final);
+            $data_proxima_preventiva = (clone $data_final_dt)->modify("+$dias_a_adicionar days")->format('Y-m-d H:i:s');
+            $data_ultima_preventiva_formatada = $data_final_dt->format('Y-m-d H:i:s');
 
             $stmt_update_plano = $conn->prepare("UPDATE planos_manutencao SET data_ultima_preventiva = ?, data_proxima_preventiva = ? WHERE id = ?");
-            $stmt_update_plano->bind_param("ssi", $data_final, $data_proxima_preventiva, $plano_id);
+            $stmt_update_plano->bind_param("ssi", $data_ultima_preventiva_formatada, $data_proxima_preventiva, $plano_id);
             $stmt_update_plano->execute();
 
             $conn->commit(); // Confirma as alterações se tudo deu certo
@@ -60,12 +62,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $prioridade = trim($_POST['prioridade'] ?? '');
     $solicitante = trim($_POST['solicitante'] ?? '');
     $horas_estimadas = (float)($_POST['horas_estimadas'] ?? 1.0);
+    $tecnico_id = !empty($_POST['tecnico_id']) ? (int)$_POST['tecnico_id'] : null;
     $status = trim($_POST['status'] ?? '');
     $data_inicial = trim($_POST['data_inicial'] ?? '');
     $data_final = !empty($_POST['data_final']) ? trim($_POST['data_final']) : null;
     $descricao_problema = trim($_POST['descricao_problema'] ?? '');
     $custo_pecas = (float)($_POST['custo_pecas'] ?? 0.0);
     $custo_mao_de_obra = (float)($_POST['custo_mao_de_obra'] ?? 0.0);
+    // Garante que as datas estejam no formato Y-m-d H:i:s para o banco de dados
+    $data_inicial_formatada = !empty($data_inicial) ? (new DateTime($data_inicial))->format('Y-m-d H:i:s') : null;
+    $data_final_formatada = !empty($data_final) ? (new DateTime($data_final))->format('Y-m-d H:i:s') : null;
 
     if (empty($id) || empty($equipamento_id) || empty($setor_id) || empty($tipo_manutencao_id) || empty($solicitante) || empty($data_inicial) || empty($descricao_problema)) {
         http_response_code(400);
@@ -73,15 +79,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $sql = "UPDATE ordens_servico SET 
                     equipamento_id = ?, setor_id = ?, tipo_manutencao_id = ?, area_manutencao = ?, 
-                    prioridade = ?, solicitante = ?, horas_estimadas = ?, status = ?, data_inicial = ?, data_final = ?, 
+                    prioridade = ?, solicitante = ?, horas_estimadas = ?, tecnico_id = ?, status = ?, data_inicial = ?, data_final = ?, 
                     descricao_problema = ?, custo_pecas = ?, custo_mao_de_obra = ?
                 WHERE id = ?";
 
         $stmt = $conn->prepare($sql);
         // Tipos: i=integer, s=string, d=double
-        $stmt->bind_param('iiisssdsdssddi', 
+        $stmt->bind_param('iiisssdisdssddi', 
             $equipamento_id, $setor_id, $tipo_manutencao_id, $area_manutencao, 
-            $prioridade, $solicitante, $horas_estimadas, $status, $data_inicial, $data_final, 
+            $prioridade, $solicitante, $horas_estimadas, $tecnico_id, $status, $data_inicial_formatada, $data_final_formatada,
             $descricao_problema, $custo_pecas, $custo_mao_de_obra, $id
         );
 
@@ -95,8 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt_tipo->execute();
             $tipo_result = $stmt_tipo->get_result()->fetch_assoc();
 
-            if ($status === 'Concluída' && $tipo_result && strtolower($tipo_result['nome']) === 'preventiva' && $data_final) {
-                registrarHistoricoPreventiva($id, $equipamento_id, (new DateTime($data_final))->format('Y-m-d'), $conn);
+            if ($status === 'Concluída' && $tipo_result && strtolower($tipo_result['nome']) === 'preventiva' && $data_final_formatada) {
+                registrarHistoricoPreventiva($id, $equipamento_id, $data_final_formatada, $conn);
             }
         } else {
             http_response_code(500);

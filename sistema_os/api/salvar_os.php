@@ -25,7 +25,9 @@ function saveServiceOrder(array $postData, mysqli $conn): array
     $horas_estimadas = (float)($postData['horas_estimadas'] ?? 1.0);
     $status = trim($postData['status'] ?? '');
     $data_inicial = trim($postData['data_inicial'] ?? '');
+    $tecnico_id = !empty($postData['tecnico_id']) ? (int)$postData['tecnico_id'] : null;
     $data_final = !empty($postData['data_final']) ? trim($postData['data_final']) : null;
+    $solicitacao_id = (int)($postData['solicitacao_id'] ?? 0); // Novo campo
     $descricao_problema = trim($postData['descricao_problema'] ?? '');
 
     // Validação de campos obrigatórios
@@ -34,7 +36,7 @@ function saveServiceOrder(array $postData, mysqli $conn): array
         return $response;
     }
 
-    $sql = "INSERT INTO ordens_servico (numero_os, equipamento_id, setor_id, tipo_manutencao_id, area_manutencao, prioridade, solicitante, horas_estimadas, status, data_inicial, data_final, descricao_problema) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO ordens_servico (numero_os, equipamento_id, setor_id, tipo_manutencao_id, area_manutencao, prioridade, solicitante, horas_estimadas, status, data_inicial, data_final, descricao_problema, tecnico_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
@@ -42,12 +44,22 @@ function saveServiceOrder(array $postData, mysqli $conn): array
         return $response;
     }
 
-    $stmt->bind_param('siiisssdssss', $numero_os, $equipamento_id, $setor_id, $tipo_manutencao_id, $area_manutencao, $prioridade, $solicitante, $horas_estimadas, $status, $data_inicial, $data_final, $descricao_problema);
+    $stmt->bind_param('siiisssdssssi', $numero_os, $equipamento_id, $setor_id, $tipo_manutencao_id, $area_manutencao, $prioridade, $solicitante, $horas_estimadas, $status, $data_inicial, $data_final, $descricao_problema, $tecnico_id);
     if ($stmt->execute()) {
         $response['success'] = true;
         $response['message'] = 'Ordem de Serviço salva com sucesso!';
+        $new_os_id = $conn->insert_id;
         $response['numero_os'] = $numero_os;
-        $response['id'] = $conn->insert_id;
+        $response['id'] = $new_os_id;
+
+        // Se a O.S. foi criada a partir de uma solicitação, atualiza a solicitação
+        if ($solicitacao_id > 0) {
+            $update_sql = "UPDATE solicitacoes_servico SET status = 'Aprovada', ordem_servico_id = ? WHERE id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("ii", $new_os_id, $solicitacao_id);
+            $update_stmt->execute();
+            $update_stmt->close();
+        }
     } else {
         if ($conn->errno == 1062) { // Código de erro para entrada duplicada
             $response['message'] = 'O número da O.S. (' . htmlspecialchars($numero_os) . ') já existe. Tente novamente.';

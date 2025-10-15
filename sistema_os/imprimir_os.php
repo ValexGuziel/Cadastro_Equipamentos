@@ -11,11 +11,13 @@ if ($os_id > 0) {
             eq.nome as equipamento_nome,
             eq.tag as equipamento_tag,
             s.nome as setor_nome,
-            tm.nome as tipo_manutencao_nome
+            tm.nome as tipo_manutencao_nome,
+            t.nome as tecnico_nome
         FROM ordens_servico os
         LEFT JOIN equipamentos eq ON os.equipamento_id = eq.id
         LEFT JOIN setores s ON os.setor_id = s.id
         LEFT JOIN tipos_manutencao tm ON os.tipo_manutencao_id = tm.id
+        LEFT JOIN tecnicos t ON os.tecnico_id = t.id
         WHERE os.id = ?
     ";
     $stmt = $conn->prepare($sql);
@@ -248,6 +250,10 @@ function formatarMoeda($valor) {
                 <strong id="solicitante-label">Solicitante</strong>
                 <span><?= htmlspecialchars($os['solicitante']) ?></span>
             </article>
+            <article class="info-card" aria-labelledby="tecnico-label">
+                <strong id="tecnico-label">Técnico Responsável</strong>
+                <span><?= htmlspecialchars($os['tecnico_nome'] ?? 'Não atribuído') ?></span>
+            </article>
             <article class="info-card" aria-labelledby="data-inicial-label">
                 <strong id="data-inicial-label">Data Inicial</strong>
                 <span><?= formatarData($os['data_inicial']) ?></span>
@@ -278,7 +284,7 @@ function formatarMoeda($valor) {
         </section>
 
         <footer>
-            &copy; <?= date('Y') ?> Sua Empresa - Impresso em <?= date('d/m/Y H:i') ?>
+            &copy; <?= date('Y') ?> Mastig - Impresso em <?= date('d/m/Y H:i') ?>
         </footer>
     </div>
 </body>

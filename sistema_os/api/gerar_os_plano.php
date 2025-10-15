@@ -85,7 +85,7 @@ try {
     // A data será efetivamente atualizada quando a O.S. for concluída, mas podemos "empurrar" para evitar gerar O.S. duplicadas.
     $periodicidade_dias = ['Semanal' => 7, 'Quinzenal' => 15, 'Mensal' => 30, 'Bimestral' => 60, 'Trimestral' => 90, 'Semestral' => 180, 'Anual' => 365];
     $dias_a_adicionar = $periodicidade_dias[$plano['periodicidade']] ?? 30; // Default 30 dias
-    $data_proxima_preventiva = (new DateTime())->modify("+$dias_a_adicionar days")->format('Y-m-d');
+    $data_proxima_preventiva = (new DateTime())->modify("+$dias_a_adicionar days")->format('Y-m-d H:i:s');
 
     $stmt_update_plano = $conn->prepare("UPDATE planos_manutencao SET data_proxima_preventiva = ? WHERE id = ?");
     $stmt_update_plano->bind_param("si", $data_proxima_preventiva, $plano_id);

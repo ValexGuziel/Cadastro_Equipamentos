@@ -29,7 +29,8 @@ $base_url = '/Projeto%20Novo/sistema_os/';
     </button>
     <div class="collapse navbar-collapse" id="main-navbar">
       <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>dashboard.php"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>listar_solicitacoes.php"><i class="bi bi-bell"></i> Solicitações</a></li>  
+      <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>dashboard.php"><i class="bi bi-speedometer2"></i> Início</a></li>
         <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>index.php"><i class="bi bi-plus-circle"></i> Nova O.S.</a></li>
         <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>ordens_servico.php"><i class="bi bi-list-task"></i> Lista de Ordens</a></li>
         <li class="nav-item"><a class="nav-link" href="<?= $base_url ?>equipamentos.php"><i class="bi bi-wrench-adjustable-circle"></i> Equipamentos</a></li>
@@ -38,3 +39,7 @@ $base_url = '/Projeto%20Novo/sistema_os/';
     </div>
   </div>
 </nav>
+
+<!-- Bootstrap e nosso script principal -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= $base_url ?>script.js"></script>

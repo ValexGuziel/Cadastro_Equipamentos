@@ -1,28 +1,32 @@
 <?php
 // index.php
-$page_title = 'Nova Ordem de Serviço';
 require_once 'api/db_connect.php';
+$page_title = 'Nova Ordem de Serviço';
 
 // Função para gerar o número da O.S.
 function gerarNumeroOS($conn) {
-    // 1. Pega o último ID inserido
     $result = $conn->query("SELECT MAX(id) AS last_id FROM ordens_servico");
     $row = $result->fetch_assoc();
     $next_id = ($row['last_id'] ?? 0) + 1;
-
-    // 2. Formata o número
     $numero_formatado = str_pad($next_id, 5, '0', STR_PAD_LEFT);
-    $data_atual = date('Y-m-d'); // Formato aaaa-mm-dd
-
+    $data_atual = date('Y-m-d');
     return "{$numero_formatado}-{$data_atual}";
 }
 
 $novo_numero_os = gerarNumeroOS($conn);
 
 // Buscar opções para os selects
-$setores = $conn->query("SELECT * FROM setores ORDER BY nome");
-$tipos_manutencao = $conn->query("SELECT * FROM tipos_manutencao ORDER BY nome");
-$equipamentos = $conn->query("SELECT eq.id, eq.nome, eq.tag, eq.setor_id, s.nome as setor_nome FROM equipamentos eq JOIN setores s ON eq.setor_id = s.id ORDER BY eq.tag");
+$setores_result = $conn->query("SELECT * FROM setores ORDER BY nome");
+$tipos_manutencao_result = $conn->query("SELECT * FROM tipos_manutencao ORDER BY nome");
+$equipamentos_result = $conn->query("SELECT eq.id, eq.nome, eq.tag, eq.setor_id, s.nome as setor_nome FROM equipamentos eq JOIN setores s ON eq.setor_id = s.id ORDER BY eq.tag");
+$tecnicos_result = $conn->query("SELECT id, nome FROM tecnicos WHERE status = 'Ativo' ORDER BY nome");
+
+// Dados da pré-solicitação (se existirem)
+$pre_equipamento_id = (int)($_GET['equipamento_id'] ?? 0);
+$pre_setor_id = (int)($_GET['setor_id'] ?? 0);
+$pre_solicitante = htmlspecialchars($_GET['solicitante'] ?? '');
+$pre_descricao = htmlspecialchars($_GET['descricao_problema'] ?? '');
+$solicitacao_id = (int)($_GET['solicitacao_id'] ?? 0);
 
 require_once __DIR__ . '/header.php';
 ?>
@@ -30,7 +34,6 @@ require_once __DIR__ . '/header.php';
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1><i class="bi bi-journal-plus"></i> Nova Ordem de Serviço</h1>
         </div>
-
         <hr>
 
         <!-- Mensagem de sucesso -->
@@ -42,6 +45,9 @@ require_once __DIR__ . '/header.php';
         </div>
 
         <form id="form-os" class="needs-validation" novalidate>
+            <!-- Campo oculto para rastrear a solicitação original -->
+            <input type="hidden" name="solicitacao_id" value="<?= $solicitacao_id ?>">
+
             <div class="row g-3">
                 <!-- Número da O.S. -->
                 <div class="col-md-4">
@@ -54,9 +60,9 @@ require_once __DIR__ . '/header.php';
                     <label for="equipamento_id" class="form-label">Equipamento</label>
                     <div class="input-group">
                         <select class="form-select" id="equipamento_id" name="equipamento_id" required>
-                            <option value="" selected disabled>Selecione...</option>
-                            <?php while($equip = $equipamentos->fetch_assoc()): ?>
-                                <option value="<?= $equip['id'] ?>" data-setor-id="<?= $equip['setor_id'] ?>"><?= htmlspecialchars($equip['tag']) ?> - <?= htmlspecialchars($equip['nome']) ?></option>
+                            <option value="" <?= $pre_equipamento_id == 0 ? 'selected' : ''; ?> disabled>Selecione...</option>
+                            <?php while($equip = $equipamentos_result->fetch_assoc()): ?>
+                                <option value="<?= $equip['id'] ?>" data-setor-id="<?= $equip['setor_id'] ?>"><?= htmlspecialchars($equip['tag'] . ' - ' . $equip['nome']) ?></option>
                             <?php endwhile; ?>
                         </select>
                         <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#modalEquipamento">+</button>
@@ -68,8 +74,8 @@ require_once __DIR__ . '/header.php';
                     <label for="setor_id" class="form-label">Setor</label>
                     <div class="input-group">
                         <select class="form-select" id="setor_id" name="setor_id" required>
-                            <option value="" selected disabled>Selecione...</option>
-                            <?php while($setor = $setores->fetch_assoc()): ?>
+                            <option value="" <?= $pre_setor_id == 0 ? 'selected' : ''; ?> disabled>Selecione...</option>
+                            <?php while($setor = $setores_result->fetch_assoc()): ?>
                                 <option value="<?= $setor['id'] ?>"><?= htmlspecialchars($setor['nome']) ?></option>
                             <?php endwhile; ?>
                         </select>
@@ -83,7 +89,7 @@ require_once __DIR__ . '/header.php';
                     <div class="input-group">
                         <select class="form-select" id="tipo_manutencao_id" name="tipo_manutencao_id" required>
                             <option value="" selected disabled>Selecione...</option>
-                             <?php while($tipo = $tipos_manutencao->fetch_assoc()): ?>
+                             <?php while($tipo = $tipos_manutencao_result->fetch_assoc()): ?>
                                 <option value="<?= $tipo['id'] ?>"><?= htmlspecialchars($tipo['nome']) ?></option>
                             <?php endwhile; ?>
                         </select>
@@ -119,7 +125,18 @@ require_once __DIR__ . '/header.php';
                 <!-- Solicitante -->
                 <div class="col-md-4">
                     <label for="solicitante" class="form-label">Solicitante</label>
-                    <input type="text" class="form-control" id="solicitante" name="solicitante" required>
+                    <input type="text" class="form-control" id="solicitante" name="solicitante" value="<?= $pre_solicitante ?>" required>
+                </div>
+
+                <!-- Técnico Responsável -->
+                <div class="col-md-4">
+                    <label for="tecnico_id" class="form-label">Técnico Responsável</label>
+                    <select class="form-select" id="tecnico_id" name="tecnico_id">
+                        <option value="" selected>Não atribuído</option>
+                        <?php while($tecnico = $tecnicos_result->fetch_assoc()): ?>
+                            <option value="<?= $tecnico['id'] ?>"><?= htmlspecialchars($tecnico['nome']) ?></option>
+                        <?php endwhile; ?>
+                    </select>
                 </div>
 
                 <!-- Horas Estimadas -->
@@ -128,17 +145,8 @@ require_once __DIR__ . '/header.php';
                     <input type="number" class="form-control" id="horas_estimadas" name="horas_estimadas" step="0.5" min="0.5" value="1.0" required>
                 </div>
 
-                <!-- Status -->
-                <div class="col-md-4">
-                    <label for="status" class="form-label">Status</label>
-                    <select class="form-select" id="status" name="status" required>
-                        <option value="Aberta" selected>Aberta</option>
-                        <option value="Em Andamento">Em Andamento</option>
-                        <option value="Aguardando Peça">Aguardando Peça</option>
-                        <option value="Concluída">Concluída</option>
-                        <option value="Cancelada">Cancelada</option>
-                    </select>
-                </div>
+                <!-- Status (oculto, sempre 'Aberta' na criação) -->
+                <input type="hidden" name="status" value="Aberta">
 
                 <!-- Data Inicial -->
                 <div class="col-md-4">
@@ -155,7 +163,7 @@ require_once __DIR__ . '/header.php';
                 <!-- Descrição do Problema -->
                 <div class="col-12">
                     <label for="descricao_problema" class="form-label">Descrição do Problema</label>
-                    <textarea class="form-control" id="descricao_problema" name="descricao_problema" rows="4" required></textarea>
+                    <textarea class="form-control" id="descricao_problema" name="descricao_problema" rows="4" required><?= $pre_descricao ?></textarea>
                 </div>
             </div>
 
@@ -250,9 +258,29 @@ require_once __DIR__ . '/header.php';
         </div>
     </div>
 
-    <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Nosso JavaScript -->
-    <script src="script.js"></script>
+    <script>
+        // Adiciona um script para preencher os campos se vierem da URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const equipamentoSelect = document.getElementById('equipamento_id');
+            const setorSelect = document.getElementById('setor_id');
+
+            const preEquipamentoId = <?= $pre_equipamento_id ?>;
+            const preSetorId = <?= $pre_setor_id ?>;
+
+            if (preEquipamentoId > 0) {
+                equipamentoSelect.value = preEquipamentoId;
+                setorSelect.value = preSetorId;
+            }
+
+            // Preenche a data inicial com a data e hora atuais
+            const dataInicialInput = document.getElementById('data_inicial');
+            if (!dataInicialInput.value) { // Só preenche se estiver vazio
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Ajusta para o fuso horário local
+                const yyyyMMddTHHmm = now.toISOString().slice(0, 16);
+                dataInicialInput.value = yyyyMMddTHHmm;
+            }
+        });
+    </script>
 </body>
 </html>

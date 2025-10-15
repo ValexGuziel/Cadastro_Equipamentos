@@ -21,7 +21,19 @@ if (!$os) {
 $setores = $conn->query("SELECT * FROM setores ORDER BY nome");
 $tipos_manutencao = $conn->query("SELECT * FROM tipos_manutencao ORDER BY nome");
 $equipamentos = $conn->query("SELECT id, nome, tag FROM equipamentos ORDER BY tag");
+$tecnicos = $conn->query("SELECT id, nome FROM tecnicos WHERE status = 'Ativo' ORDER BY nome");
 
+// Função para formatar a data do banco (Y-m-d H:i:s) para o formato do input datetime-local (Y-m-d\TH:i)
+function formatarDataParaInput($data) {
+    if (empty($data)) {
+        return '';
+    }
+    try {
+        return (new DateTime($data))->format('Y-m-d\TH:i');
+    } catch (Exception $e) {
+        return '';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -109,6 +121,18 @@ $equipamentos = $conn->query("SELECT id, nome, tag FROM equipamentos ORDER BY ta
                 </div>
 
                 <div class="col-md-4">
+                    <label for="tecnico_id" class="form-label">Técnico Responsável</label>
+                    <select class="form-select" id="tecnico_id" name="tecnico_id">
+                        <option value="">Não atribuído</option>
+                        <?php while($tecnico = $tecnicos->fetch_assoc()): ?>
+                            <option value="<?= $tecnico['id'] ?>" <?= ($tecnico['id'] == $os['tecnico_id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($tecnico['nome']) ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
                     <label for="horas_estimadas" class="form-label">Horas Estimadas</label>
                     <input type="number" class="form-control" id="horas_estimadas" name="horas_estimadas" step="0.5" min="0" value="<?= htmlspecialchars($os['horas_estimadas'] ?? '1.0') ?>" required>
                 </div>
@@ -116,22 +140,19 @@ $equipamentos = $conn->query("SELECT id, nome, tag FROM equipamentos ORDER BY ta
                 <div class="col-md-4">
                     <label for="status" class="form-label">Status</label>
                     <select class="form-select" id="status" name="status" required>
-                        <option value="Aberta" <?= $os['status'] == 'Aberta' ? 'selected' : '' ?>>Aberta</option>
-                        <option value="Em Andamento" <?= $os['status'] == 'Em Andamento' ? 'selected' : '' ?>>Em Andamento</option>
-                        <option value="Aguardando Peça" <?= $os['status'] == 'Aguardando Peça' ? 'selected' : '' ?>>Aguardando Peça</option>
+                        <option value="Aberta" <?= $os['status'] == 'Aberta' ? 'selected' : '' ?>>Aberta</option>                        
                         <option value="Concluída" <?= $os['status'] == 'Concluída' ? 'selected' : '' ?>>Concluída</option>
-                        <option value="Cancelada" <?= $os['status'] == 'Cancelada' ? 'selected' : '' ?>>Cancelada</option>
                     </select>
                 </div>
 
                 <div class="col-md-4">
                     <label for="data_inicial" class="form-label">Data Inicial</label>
-                    <input type="datetime-local" class="form-control" id="data_inicial" name="data_inicial" value="<?= htmlspecialchars($os['data_inicial']) ?>" required>
+                    <input type="datetime-local" class="form-control" id="data_inicial" name="data_inicial" value="<?= formatarDataParaInput($os['data_inicial']) ?>" required>
                 </div>
 
                 <div class="col-md-4">
                     <label for="data_final" class="form-label">Data Final</label>
-                    <input type="datetime-local" class="form-control" id="data_final" name="data_final" value="<?= htmlspecialchars($os['data_final'] ?? '') ?>" <?= $os['status'] !== 'Concluída' ? 'disabled' : '' ?>>
+                    <input type="datetime-local" class="form-control" id="data_final" name="data_final" value="<?= formatarDataParaInput($os['data_final'] ?? '') ?>" <?= $os['status'] !== 'Concluída' ? 'disabled' : '' ?>>
                 </div>
 
                 <div class="col-12">

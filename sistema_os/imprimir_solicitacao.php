@@ -1,35 +1,31 @@
 <?php
 require_once 'api/db_connect.php';
 
-$plano_id = (int)($_GET['id'] ?? 0);
-$plano = null;
+$solicitacao_id = (int)($_GET['id'] ?? 0);
+$solicitacao = null;
 
-if ($plano_id > 0) {
+if ($solicitacao_id > 0) {
     $sql = "
         SELECT 
-            pm.id,
-            pm.periodicidade,
-            pm.data_ultima_preventiva,
-            pm.data_proxima_preventiva,
-            pm.instrucoes,
+            sol.*,
             eq.nome as equipamento_nome,
             eq.tag as equipamento_tag,
             s.nome as setor_nome
-        FROM planos_manutencao pm
-        JOIN equipamentos eq ON pm.equipamento_id = eq.id
-        JOIN setores s ON eq.setor_id = s.id
-        WHERE pm.id = ?
+        FROM solicitacoes_servico sol
+        LEFT JOIN equipamentos eq ON sol.equipamento_id = eq.id
+        LEFT JOIN setores s ON sol.setor_id = s.id
+        WHERE sol.id = ?
     ";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $plano_id);
+    $stmt->bind_param("i", $solicitacao_id);
     $stmt->execute();
     $result = $stmt->get_result();
-    $plano = $result->fetch_assoc();
+    $solicitacao = $result->fetch_assoc();
     $stmt->close();
 }
 
-if (!$plano) {
-    die("Plano de Manutenção não encontrado!");
+if (!$solicitacao) {
+    die("Solicitação de Serviço não encontrada!");
 }
 
 function formatarData($data) {
@@ -47,7 +43,7 @@ function formatarData($data) {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Plano de Manutenção - Equip. <?= htmlspecialchars($plano['equipamento_tag']) ?></title>
+<title>Solicitação de Serviço - ID <?= htmlspecialchars($solicitacao['id']) ?></title>
 <style>
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -86,6 +82,9 @@ function formatarData($data) {
         border-bottom: 3px solid #007bff;
         padding-bottom: 15px;
         margin-bottom: 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
     header h1 {
         font-size: 32px;
@@ -95,7 +94,7 @@ function formatarData($data) {
     }
     .info-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: 25px;
         margin-bottom: 40px;
     }
@@ -132,22 +131,21 @@ function formatarData($data) {
 </style>
 </head>
 <body>
-    <button class="print-btn" onclick="window.print()">Imprimir Plano</button>
+    <button class="print-btn" onclick="window.print()">Imprimir Solicitação</button>
 
     <div class="container">
-        <header><h1>Plano de Manutenção Preventiva</h1></header>
+        <header><h1>Solicitação de Serviço</h1></header>
 
         <section class="info-grid">
-            <div class="info-card"><strong>Equipamento</strong><span><?= htmlspecialchars($plano['equipamento_tag'] . ' - ' . $plano['equipamento_nome']) ?></span></div>
-            <div class="info-card"><strong>Setor</strong><span><?= htmlspecialchars($plano['setor_nome']) ?></span></div>
-            <div class="info-card"><strong>Periodicidade</strong><span><?= htmlspecialchars($plano['periodicidade']) ?></span></div>
-            <div class="info-card"><strong>Última Preventiva</strong><span><?= formatarData($plano['data_ultima_preventiva']) ?></span></div>
-            <div class="info-card"><strong>Próxima Preventiva</strong><span><?= formatarData($plano['data_proxima_preventiva']) ?></span></div>
+            <div class="info-card"><strong>Equipamento :&nbsp;&nbsp;&nbsp;</strong><span><?= htmlspecialchars($solicitacao['equipamento_tag'] . ' - ' . $solicitacao['equipamento_nome']) ?></span></div>
+            <div class="info-card"><strong>Setor :&nbsp;&nbsp;&nbsp;</strong><span><?= htmlspecialchars($solicitacao['setor_nome']) ?></span></div>
+            <div class="info-card"><strong>Solicitante :&nbsp;&nbsp;&nbsp;</strong><span><?= htmlspecialchars($solicitacao['solicitante']) ?></span></div>
+            <div class="info-card"><strong>Data da Solicitação :&nbsp;&nbsp;&nbsp;</strong><span><?= formatarData($solicitacao['data_solicitacao']) ?></span></div>
         </section>
 
         <section class="description-section">
-            <strong>Instruções de Manutenção (Checklist)</strong>
-            <p><?= nl2br(htmlspecialchars($plano['instrucoes'])) ?></p>
+            <strong>Descrição do Problema / Necessidade</strong>
+            <p><?= nl2br(htmlspecialchars($solicitacao['descricao_problema'])) ?></p>
         </section>
     </div>
 </body>

@@ -27,6 +27,19 @@ if ($plano_id > 0) {
 if (!$plano) {
     die("Plano de Manutenção não encontrado!");
 }
+
+// Função para formatar a data do banco (Y-m-d H:i:s) para o formato do input datetime-local (Y-m-d\TH:i)
+function formatarDataParaInput($data) {
+    if (empty($data)) {
+        return '';
+    }
+    try {
+        return (new DateTime($data))->format('Y-m-d\TH:i');
+    } catch (Exception $e) {
+        return '';
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -82,13 +95,13 @@ if (!$plano) {
                 <!-- Data da Última Preventiva -->
                 <div class="col-md-6">
                     <label for="data_ultima_preventiva" class="form-label">Data da Última Preventiva</label>
-                    <input type="date" class="form-control" id="data_ultima_preventiva" name="data_ultima_preventiva" value="<?= htmlspecialchars($plano['data_ultima_preventiva']) ?>" required>
+                    <input type="datetime-local" class="form-control" id="data_ultima_preventiva" name="data_ultima_preventiva" value="<?= formatarDataParaInput($plano['data_ultima_preventiva']) ?>" required>
                 </div>
 
                 <!-- Data da Próxima Preventiva (calculado) -->
                 <div class="col-md-6">
                     <label for="data_proxima_preventiva" class="form-label">Próxima Preventiva</label>
-                    <input type="text" class="form-control" id="data_proxima_preventiva" name="data_proxima_preventiva" readonly>
+                    <input type="datetime-local" class="form-control" id="data_proxima_preventiva" name="data_proxima_preventiva" required readonly>
                 </div>
 
                 <!-- Instruções -->
@@ -124,14 +137,13 @@ if (!$plano) {
             const periodicidade = periodicidadeSelect.value;
 
             if (ultimaData && periodicidade && periodicidadeDias[periodicidade]) {
-                const data = new Date(ultimaData + 'T00:00:00');
+                const data = new Date(ultimaData);
                 data.setDate(data.getDate() + periodicidadeDias[periodicidade]);
                 
-                const dia = String(data.getDate()).padStart(2, '0');
-                const mes = String(data.getMonth() + 1).padStart(2, '0');
-                const ano = data.getFullYear();
-
-                proximaPrevInput.value = `${dia}/${mes}/${ano}`;
+                // Formata para YYYY-MM-DDTHH:MM
+                const offset = data.getTimezoneOffset();
+                const dataLocal = new Date(data.getTime() - (offset*60*1000));
+                proximaPrevInput.value = dataLocal.toISOString().slice(0,16);
             } else {
                 proximaPrevInput.value = '';
             }
